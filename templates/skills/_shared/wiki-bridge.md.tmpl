@@ -1,0 +1,58 @@
+# Wiki Bridge — {{DOMAIN}}
+
+Shared procedures that connect the `{{DOMAIN_LOWER}}-*` design skills to the `{{DOMAIN}}` wiki. The design skills NEVER read the wiki inline. They **dispatch a subagent** that operates directly on the wiki and returns a compact result. This keeps heavy wiki-reading out of the design conversation and sidesteps the cross-repo command-registration problem (the `/wiki-*` commands live in the wiki repo, not this target repo).
+
+## Paths
+
+- **Wiki root:** `{{WIKI_ROOT}}`
+- **This domain's wiki:** `{{WIKI_ROOT}}/{{DOMAIN}}` — these skills live inside it, at
+  `{{WIKI_ROOT}}/{{DOMAIN}}/skills/`, so the wiki dir is this skill's grandparent (`../..`). The
+  target codebase the wiki cites is at `{{TARGET_REPO}}` (also reachable as `{{TARGET_REPO}}/wiki`,
+  a symlink back into this domain's wiki).
+- **Commands the subagent follows:** `{{WIKI_ROOT}}/.claude/commands/wiki-query.md`, `wiki-ingest.md`
+
+If the symlink resolves but `{{WIKI_ROOT}}/{{DOMAIN}}` does not exist, STOP and tell the user the wiki is missing — do not fabricate grounding.
+
+## Procedure: `ground(question)`
+
+Dispatch a subagent (general-purpose / Explore) with this brief:
+
+> Operate on the wiki at `{{WIKI_ROOT}}/{{DOMAIN}}`. Follow the procedure in
+> `{{WIKI_ROOT}}/.claude/commands/wiki-query.md` for the domain `{{DOMAIN}}` (skip the
+> domain-detection step — the domain is fixed). Question: "<QUESTION>".
+> Read `retrieval.yaml` first (token-set match), then index → pages. Also surface
+> anything explicitly **decided against** or any constraint/invariant that touches this area.
+> Return ONLY this structure — no prose preamble:
+>
+> ```
+> ## Context Brief: <question>
+> Prior decisions: [[page]] — one line · (or "none found")
+> Decided against / constraints: [[page]] — one line · (or "none found")
+> Related flows/features: [[page]] — one line
+> Invariants & gotchas: [[page]] — one line
+> Relevant external context (meeting/Notion/research): <source> — one line · (or "none")
+> Cited sources: <repo-path or url> ...
+> Coverage gap: <what the wiki does NOT cover for this question>
+> ```
+
+Run several `ground()` calls in parallel for distinct questions when grounding a feature. Fold the returned briefs into the design's **Context Brief** section, verbatim citations preserved.
+
+**If the wiki already settled the question, say so loudly** — surface the deciding page before proposing anything new.
+
+## Procedure: `persist(design)`
+
+Called only after the user accepts a design. Dispatch a subagent with this brief:
+
+> Operate on the wiki at `{{WIKI_ROOT}}/{{DOMAIN}}`. Follow
+> `{{WIKI_ROOT}}/.claude/commands/wiki-ingest.md` for the domain `{{DOMAIN}}`.
+> The source is the design doc at `{{WIKI_ROOT}}/{{DOMAIN}}/designs/<file>.md` (status: accepted).
+> 1. Distill atomic pages from its locked decisions, architecture, and observed constraints —
+>    one concept per page, L3 decay frontmatter (`cited_region` + `content_hash`) against the
+>    code paths the design cites.
+> 2. Update `index.md` (new entries under the right sections) and `log.md` (ingest entry).
+> 3. Propose `retrieval.yaml` routes so future `/wiki-query` calls surface the new pages.
+> 4. Run a contradiction check: does any new page conflict with an existing decision? If so,
+>    do NOT overwrite — return the conflict for the user to resolve.
+> Return: pages created/updated (with kind), routes proposed, and any contradictions found.
+
+Report the persisted pages + routes back in the design conversation. If a contradiction was found, raise it with the user before finalizing.

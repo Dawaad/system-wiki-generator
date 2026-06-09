@@ -1,0 +1,21 @@
+# Git-SHA sync markers — the commit each source repo was last ingested at.
+#
+# WHY: the wiki is an LLM-only navigation layer over code. If main advances past
+# the commit a page was written against, the page may be silently stale. This file
+# is the staleness anchor: /wiki-query, /wiki-ingest, /wiki-lint read it FIRST,
+# run `git -C <path> rev-parse HEAD`, and if HEAD != last_sync_sha they warn how
+# many commits behind the wiki is (`git rev-list --count <sha>..HEAD`) before
+# answering a code-grounded question. A mirror lives in retrieval.yaml `sync:`.
+#
+# UPDATE ONLY after a full ingest/sync pass actually reconciles the diff.
+
+repos:
+{{SYNC_REPO_BLOCKS}}
+# One block per source repo. Shape:
+#   {{REPO_NAME}}:
+#     path: {{REPO_ROOT}}
+#     branch: main
+#     last_sync_sha: <git -C {{REPO_ROOT}} rev-parse HEAD at seed time>
+#     last_sync_short: <short sha>
+#     last_sync_date: {{DATE}}
+#     last_sync_subject: "<commit subject>"

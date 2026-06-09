@@ -1,0 +1,207 @@
+---
+type: wiki-schema
+wiki: {{DOMAIN}}
+Created: {{DATE}}
+Updated: {{DATE}}
+---
+
+# {{DOMAIN}} Wiki
+
+{{DOMAIN_SUMMARY}}
+
+Source repos:
+{{REPO_ROOTS_BULLETED}}
+
+LLM-only navigation layer over the codebase. Wiki pages cite code regions directly — no intermediate design-doc layer. This file is the master schema for the `{{DOMAIN}}` wiki; it is self-contained.
+
+## 3-layer LLM-only architecture
+
+- **L0 — Source-of-truth.** Code + ADRs + linked docs under the source repos. Never duplicated; only cited.
+- **L1 — Routing manifest.** `{{DOMAIN}}/retrieval.yaml`. Deterministic task-pattern → file-path map. Read FIRST by `/wiki-query`, `/wiki-ingest`, `/wiki-lint`.
+- **L2 — Atomic insight pages.** `{{DOMAIN}}/pages/*.md`. Each page must justify itself on at least one of: gotcha / invariant / why-non-obvious / observed-failure-mode. Target ~80–150 words.
+- **L3 — Decay tracker.** Per-source `cited_region` + `content_hash` in frontmatter. `/wiki-lint` re-hashes on demand and flags drift. Per-repo `sync:` SHA in `.last-sync` + `retrieval.yaml` anchors staleness.
+
+## Scope
+
+In:
+{{SCOPE_IN}}
+
+Out:
+{{SCOPE_OUT}}
+
+## Sources
+
+Pointers, never copies. Subfolders under `{{DOMAIN}}/sources/`:
+- `sources/code/` — repo path pointers
+- `sources/docs/` — internal design docs, ADRs, READMEs
+- `sources/research/` — external papers / articles
+- `sources/notion/` — Notion page URLs (link, not copy)
+- `sources/experiments/` — eval runs, benchmarks, incident traces
+
+## Kinds
+
+`{{KINDS}}`
+
+## Page Templates
+
+### Decision
+```markdown
+## Choice
+<what was chosen, in one line>
+
+## Why
+<reasoning>
+
+## Invariant
+<what must stay true>
+
+## Gotcha
+<what bites if you forget>
+
+## Tradeoff
+<what you gave up>
+
+## Cross-links
+```
+
+### Flow
+```markdown
+## Trigger
+## Path
+1. <component> receives <input>
+2. <component> calls <component> with <payload>
+## Outputs
+## Invariants
+## Cross-links
+```
+
+### Feature
+```markdown
+## Purpose
+<what this sub-feature does, one line>
+
+## Orchestration
+<which components it coordinates and in what order>
+
+## Invariants
+## Gotcha
+## Cross-links
+```
+
+### Interaction
+```markdown
+## Pair
+<component A> ↔ <component B>
+
+## Contract
+<what A expects of B, what B guarantees>
+
+## Failure mode
+<what happens when the contract breaks>
+
+## Cross-links
+```
+
+### SOP (system ops)
+```markdown
+## Trigger
+<when to run this — alert, deploy, recovery>
+
+## Steps
+1. ...
+
+## Quality bar
+<what "done" looks like — checks to verify>
+
+## Common failures
+<what goes wrong + how to recover>
+
+## Cross-links
+```
+
+### Insight
+```markdown
+## Claim
+<one sentence — what's true>
+
+## Evidence
+<what observation/incident/measurement showed it>
+
+## Implication
+<what this changes about how we build/operate>
+
+## Source
+<incident link, benchmark output, code path>
+
+## Cross-links
+```
+
+### Framework
+```markdown
+## Lens
+<the model, one line>
+
+## When to apply
+## How it shapes the decision
+## Cross-links
+```
+
+## Routing
+
+**Canonical routes live in `{{DOMAIN}}/retrieval.yaml`.** Skills MUST read it first.
+
+Heuristic fall-backs (only when `retrieval.yaml` has no matching pattern):
+
+| Task pattern | Auto-load |
+|--------------|-----------|
+| "How does X happen end-to-end" | `kind: flow` matching X |
+| "Why did we choose X" | `kind: decision` matching X |
+| "How do I deploy/rollback/debug X" | `kind: sop` matching X |
+| Reviewing system architecture | `kind in (decision, flow, sop)` for the component |
+| Designing new feature | `kind in (decision, framework)` for adjacent systems |
+
+When a query recurs without a `retrieval.yaml` match, add the pattern (batched via `/wiki-routes-review`).
+
+## Conventions
+
+- Tag prefix: `{{TAG_PREFIX}}*`
+- Reference repo code by path (`<repo-root>/<path>`) — never paste
+- Customer- or domain-specific terminology is fine on pages but should be tagged `{{TAG_PREFIX}}<area>/<name>` so future cleanup is easy
+
+## Page Frontmatter (L3-extended)
+
+Pages extend the base schema with two decay-tracker fields per source:
+
+```yaml
+---
+type: wiki-page
+wiki: {{DOMAIN}}
+kind: {{KINDS_PIPE}}
+sources:
+  - path: <repo-root>/<file>
+    cited_region: "<whole-file>"               # heading, function name, or "<whole-file>"
+    content_hash: <sha256-of-region-text>      # set by /wiki-ingest, checked by /wiki-lint
+Updated: YYYY-MM-DD
+tags:
+---
+```
+
+Backward-compat: pages without `cited_region`/`content_hash` keep working. Lint skips the decay check on them.
+
+## Page Filter (L2)
+
+A page exists ONLY if it justifies itself on at least one of:
+
+- **Gotcha** — an edge case or footgun not visible from reading the code
+- **Invariant** — what must stay true across changes
+- **Why-non-obvious** — rationale behind a choice that isn't derivable from the code
+- **Observed failure mode** — production incident, debugging trace, scaling limit
+
+If a page can't justify itself in ~150 words on at least one axis, it restates source — delete it.
+
+## Anti-Patterns
+
+- Pages that restate code ("Component X has methods Y, Z" — grep the code)
+- Pasting full configs / compose files
+- Tutorials (those belong in the repo README)
+- Pages that fail the L2 filter above

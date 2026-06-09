@@ -1,0 +1,92 @@
+---
+description: "Structural health check on a domain wiki: dead links, duplicates, orphans, stale pages, L3 source decay, kind violations, contradictions. Reports, then offers fixes."
+---
+
+# /wiki-lint — Wiki Lint
+
+Run a structural health check on a domain wiki. Find issues, optionally fix.
+
+## Input
+
+$ARGUMENTS
+
+Optional: a domain name or `all`. If omitted, detect from the working directory (a `wiki` symlink) or default to `all`.
+
+## Workflow
+
+### 1. Resolve wiki root + targets (dynamic)
+
+Default `WIKI_ROOT={{WIKI_ROOT}}` (or the parent of a `wiki` symlink in the CWD). Discover domains by scanning `<WIKI_ROOT>/*/CLAUDE.md`. Resolve the target: a named domain, the domain whose `wiki` symlink matches the CWD, or `all`. Read each target's `CLAUDE.md` for scope rules and kinds.
+
+### 2. Build page graph
+
+For each target wiki, read `index.md` and every file in `pages/`. Per page extract: outbound `[[wikilinks]]`, `sources:` paths, `Updated:`, `kind:`, `wiki:` (must match folder).
+
+### 3. Run checks
+
+#### Dead links
+Wikilinks pointing to nonexistent pages. Report each with the containing page.
+
+#### Duplicate pages
+Two+ pages covering the same topic. Flag pairs with an overlap description.
+
+#### Orphan pages
+Pages in `pages/` not listed in `index.md` AND with zero inbound wikilinks.
+
+#### Stale pages
+`Updated:` >90 days old AND the page makes fast-moving-state claims ("currently", "not yet implemented", "TODO", "stub").
+
+#### Source drift
+For each `sources:` entry: if a file path, check it exists; if modified well after `Updated:`, flag. If a URL, skip integrity; flag if `Updated:` is >180 days for fast-moving sources.
+
+#### Decay (L3)
+Only for pages whose `sources:` entries are objects with `path` + `cited_region` + `content_hash` (extended form).
+
+For each such entry:
+1. Check `path` exists. If missing → `MOVED: <page> cites missing <path>`. Skip the rest of this entry.
+2. Extract the cited region:
+   - `cited_region` = `<whole-file>` → entire file.
+   - starts with `## `/`### ` → from that heading line up to (not including) the next heading at same-or-higher level (`awk '/^<heading>$/{f=1; print; next} f && /^#{1,N} /{exit} f' "$SRC"`).
+   - else (symbol / free-text) → grep the line, take ±20 lines of context.
+3. Compute SHA-256 of the region; compare to stored `content_hash`.
+4. Mismatch → `STALE: <page> cites <path>:<cited_region> (changed since Updated: <date>)`. Match → silent.
+
+Skip pages with bare-string `sources:` entries (legacy). False-positive target <10% — region-level hashing means unrelated edits elsewhere in the file don't trigger flags.
+
+#### Kind violations
+`kind:` not in the wiki's allowed kinds; conflated kinds (split); missing `kind:`; `wiki:` ≠ folder.
+
+#### Contradictions
+Conflicting claims across pages: state-machine descriptions, contradicting invariants, "not implemented" vs a flow describing it working, an SOP contradicting an insight.
+
+#### Anti-pattern violations
+Over 300 words; no cross-links; obviously restates source; missing required frontmatter; subfolders inside `pages/` (must be flat); source pointer with empty `pages_derived:`.
+
+### 4. Report
+
+Per wiki:
+```
+## Wiki Lint: <domain>
+
+### Critical (fix now)
+- Dead links / Contradictions / Kind violations / MOVED
+
+### Warning (review)
+- Stale pages / Source drift / STALE (decay) / Anti-pattern violations
+
+### Info
+- Orphans / Duplicate candidates
+
+### Stats
+- Total pages: N (by kind ...)
+- Pages in index: N · Sources tracked: N · Avg words: N · Last ingest: <date from log.md>
+- Sync: <repo> @ <last_sync_sha> (HEAD <N> commits ahead) per .last-sync
+```
+
+### 5. Offer fixes
+
+Per issue, offer a specific fix (dead link → stub or remove; orphan → index or delete; stale → re-read source; over-limit → split/trim; **STALE** → re-read the cited region, update the claim and recompute `content_hash`, don't just bump `Updated:`; **MOVED** → relocate the source, update `path` + `content_hash`). Ask before applying. **Don't auto-fix contradictions** — surface for a human.
+
+### 6. Update log
+
+If fixes were applied, append to `log.md`: `## [YYYY-MM-DD] lint | <N found, M fixed>`.

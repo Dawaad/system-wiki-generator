@@ -1,0 +1,56 @@
+---
+name: {{DOMAIN_LOWER}}-feature-design
+description: Orchestrates feature/implementation design for {{DOMAIN}}, grounded in the {{DOMAIN}} wiki. Interviews the intent, fires targeted wiki queries to surface prior decisions and what was decided against, runs a product lens and an engineering lens, and persists the resulting design back into the wiki as a living doc plus atomic pages. Use when designing a new {{DOMAIN}} feature, subsystem, or non-trivial change — it is the front door; the product/eng lenses are its phases.
+---
+
+# {{DOMAIN}} Feature Design
+
+Front door for designing a {{DOMAIN}} feature. The differentiator over a generic design review: every step is grounded in the {{DOMAIN}} wiki, and the output persists back into it so designs compound.
+
+Read `../_shared/wiki-bridge.md` (`ground()` / `persist()`) and `../_shared/design-doc.md` (the living-doc skeleton). The product and eng lenses live in `../product-review/SKILL.md` and `../eng-review/SKILL.md` — reuse them; don't re-implement.
+
+## Phase 1 — Intake
+
+Interview the feature intent **one question at a time** (don't batch). Establish: the user-facing problem, who it's for, and any hard constraints. As you go, sniff whether this is **product-heavy** (scope/positioning uncertain) or **eng-heavy** (scope clear, the risk is in the how). That decides which lenses run at full depth.
+
+## Phase 2 — Wiki grounding (the differentiator)
+
+Fire several `ground()` calls in parallel for the feature's area:
+- Prior decisions touching this area
+- **What was decided against** (and why)
+- Related features/flows
+- Applicable invariants / gotchas
+- Relevant external context (meeting / Notion / research) the wiki carries
+
+Assemble the returned briefs into a single **Context Brief** and surface it to the user **before proposing anything**. If the wiki already settled the question, say so loudly and stop — confirm with the user before redesigning a decided thing.
+
+Open the living design doc now (status `proposed`) and write Problem + Context Brief.
+
+## Phase 3 — Product lens
+
+Run `../product-review/SKILL.md` (skip its own grounding step — Phase 2 covered it; pass it the Context Brief). Premise challenge → 2–3 forced alternatives (effort/risk/reuse, each citing wiki prior art) → scope-mode selection. One decision = one `AskUserQuestion`.
+
+Write the locked scope, "NOT in scope", and "already exists" into the design doc.
+
+Skip to a light touch if Phase 1 flagged this eng-heavy and the scope is already clear — but always run the premise challenge.
+
+## Phase 4 — Engineering lens
+
+Run `../eng-review/SKILL.md` (pass it the Context Brief; skip its duplicate grounding). Complexity gate → Architecture / Data-flow & edge cases / Test coverage / Performance, each grounded against the wiki system-design pages and the code those pages cite. ASCII diagrams. Confidence calibration.
+
+Write architecture, failure modes, test plan, and P1/P2/P3 tasks into the design doc.
+
+## Phase 5 — Persist
+
+Present the complete design doc. On user acceptance:
+1. Flip the doc's `status:` to `accepted`.
+2. Call the bridge `persist()` — distills atomic pages from the locked decisions, updates `index.md` / `log.md`, proposes `retrieval.yaml` routes, and runs a contradiction check against existing decisions.
+3. If `persist()` returns a contradiction, surface it — do NOT let the subagent overwrite a prior decision. Resolve with the user.
+4. Report: design doc path, pages created/updated (with kind), routes proposed.
+
+The design is now part of the {{DOMAIN}} knowledge base — the next `{{DOMAIN_LOWER}}-feature-design` run will surface it via `ground()`.
+
+## Stop conditions
+
+- Wiki missing or `ground()` returns nothing for a core question → tell the user; don't fabricate grounding.
+- User rejects the premise in Phase 3 → stop; record the "don't build" decision in the doc and offer to persist just that.

@@ -1,0 +1,76 @@
+---
+description: "Query the domain wikis under a central wiki root. Reads the L1 routing manifest first, then navigates index → pages, and synthesizes a cited answer."
+---
+
+# /wiki-query — Wiki Query
+
+Answer a question using one or more domain wikis. Navigate by routing manifest → index → links, not a full corpus scan.
+
+## Input
+
+$ARGUMENTS
+
+The argument is a question. If omitted, ask.
+
+## Workflow
+
+### 1. Resolve wiki root + detect domain (dynamic)
+
+This command is domain-agnostic. Resolve the target domain at run time — never from a hardcoded table.
+
+1. **Wiki root.** Default `WIKI_ROOT={{WIKI_ROOT}}`. If the current working directory contains a `wiki` symlink, prefer it: `readlink -f wiki` resolves to `<WIKI_ROOT>/<DOMAIN>` — set `WIKI_ROOT` to its parent and `DOMAIN` to its basename. Done.
+2. **Discover domains.** List `<WIKI_ROOT>/*/CLAUDE.md`. Each is a domain wiki; its frontmatter declares `wiki:` and its body a one-paragraph scope.
+3. **Pick the domain** in priority order:
+   - Working directory inside a target repo whose `wiki` symlink resolves into `<WIKI_ROOT>/<DOMAIN>` → that domain.
+   - Else match the question topic against each domain's scope paragraph; pick the best fit (query multiple if it spans).
+   - Else ask which domain.
+
+No command edits are needed when a new domain is added later — it appears as a new `<WIKI_ROOT>/*/CLAUDE.md`.
+
+### 2. Check sync staleness (L3)
+
+Read `<WIKI_ROOT>/<DOMAIN>/.last-sync`. For each repo, run `git -C <path> rev-parse HEAD`. If it differs from `last_sync_sha`, note the wiki is ~`git rev-list --count <last_sync_sha>..HEAD` commits behind for code-grounded answers, then proceed.
+
+### 3. Check routing manifest (L1)
+
+Read `<WIKI_ROOT>/<DOMAIN>/retrieval.yaml` BEFORE the index.
+
+**Matching — token-set subset match.**
+
+1. Tokenize the user's query: split on non-word chars, lowercase, drop tokens shorter than 2 chars. Plural-stem:
+   - len>4 ending `ies` → strip `ies`, append `y` (entities → entity)
+   - len>4 ending `es` → strip `es` (boxes → box)
+   - len>3 ending `s` → strip `s` (hooks → hook)
+2. For each `route`: tokenize `pattern` the same way. If pattern-tokens ⊆ query-tokens → match. Else check each `aliases:` entry the same way.
+3. Collect every matched route's `load:` paths into the read-set.
+
+**If at least one route matched:**
+- Read every path in the read-set verbatim (wiki-root-relative page, or `~`/`/`-prefixed absolute source path).
+- Skip steps 4–5. Go straight to synthesis.
+
+**If NO route matched (fall-through):**
+- Append the query to `<WIKI_ROOT>/<DOMAIN>/retrieval.suggested.log`:
+  ```bash
+  echo "$(date '+%Y-%m-%d %H:%M') | <verbatim user query>" >> "<WIKI_ROOT>/<DOMAIN>/retrieval.suggested.log"
+  ```
+- Fall through to step 4. Do NOT propose routes inline — `/wiki-routes-review` handles that in batch.
+
+### 4. Read index
+
+Read `<WIKI_ROOT>/<DOMAIN>/index.md`. Pick relevant pages by title + summary + section. Don't read all pages.
+
+### 5. Navigate
+
+Read the most relevant page(s). Follow `[[cross-links]]` if the answer spans pages. Read at most 5 pages — if you need more, the wiki has a coverage gap.
+
+### 6. Synthesize
+
+Answer directly from wiki content. Cite pages: `(from [[page-name]])`, note kind when relevant. If the wiki doesn't cover it, say so explicitly and fall back to the cited source code.
+
+### 7. Evaluate for promotion
+
+If the answer is reusable and future-you would ask again, offer to promote it via `/wiki-ingest`. Don't auto-create pages.
+
+### 8. Report
+
+Deliver the answer, list pages consulted (with kind), flag coverage gaps. If a route matched, name the matched `pattern` (and alias, if via alias) so the user sees which deterministic route fired.

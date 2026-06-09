@@ -1,0 +1,90 @@
+---
+description: "Batch-review accumulated unmatched queries from retrieval.suggested.log; propose route additions for retrieval.yaml; apply the approved batch."
+---
+
+# /wiki-routes-review — Wiki Routes Review
+
+Process accumulated fall-through queries from `retrieval.suggested.log` and propose batched route additions to `retrieval.yaml`. Batching avoids the per-query interruption that proposing routes inline would cause.
+
+## Input
+
+$ARGUMENTS
+
+Optional: a domain name or `all`. If omitted, detect from the working directory or default to `all`.
+
+## Workflow
+
+### 1. Resolve wiki root + targets (dynamic)
+
+Same resolution as `/wiki-lint` step 1. Skip domains without a `retrieval.yaml` — they don't use the routing system.
+
+### 2. Read suggestion log
+
+Read `<WIKI_ROOT>/<DOMAIN>/retrieval.suggested.log`. One line per unmatched query:
+```
+2026-06-08 14:32 | how does the worker queue avoid double-dispatch
+2026-06-08 15:01 | retry backoff configuration
+```
+If missing or empty, report "no pending suggestions" and exit.
+
+### 3. Cluster similar queries
+
+Group queries that would map to the same route (shared topic words). For each cluster identify: the 1–3 most representative queries, the pages that best answer them (read `index.md` + the pages to confirm), and whether an existing route should be EXTENDED (add aliases) vs a NEW route created.
+
+### 4. Read current `retrieval.yaml`
+
+For each cluster: if its topic overlaps an existing route's `load:` set ≥80%, propose aliases on that route; else propose a new route.
+
+### 5. Present batch for approval
+
+One proposal block per cluster. Extend example:
+```
+Cluster: retry/backoff (3 queries)
+Proposal: extend route 'worker queue' with aliases
+  aliases:
+    - "retry backoff"
+    - "double dispatch"
+Pages already loaded by 'worker queue' cover this — no new pages needed.
+```
+New-route example:
+```
+Cluster: connector setup (2 queries)
+Proposal: NEW route
+  - pattern: "connector setup"
+    aliases: ["data source config"]
+    load:
+      - <WIKI_ROOT>/<DOMAIN>/pages/<page>.md   # ← confirm exists or needs writing
+    why: <one-line>
+```
+If a proposal references a page that doesn't exist, flag `MISSING PAGE` and suggest `/wiki-ingest` for the underlying source.
+
+### 6. Apply approved batch
+
+For each approved cluster: extend (add `aliases:`, preserve order) or append a new route under the appropriate section. Edit `retrieval.yaml` once per session.
+
+### 7. Truncate log
+
+After applying, archive consumed lines:
+```bash
+mv "<WIKI_ROOT>/<DOMAIN>/retrieval.suggested.log" "<WIKI_ROOT>/<DOMAIN>/retrieval.suggested.archive.log"
+touch "<WIKI_ROOT>/<DOMAIN>/retrieval.suggested.log"
+```
+Keep unapproved queries in the live log for next review.
+
+### 8. Verify
+
+Re-run each approved cluster's representative query through the token-set matching logic from `/wiki-query`. Confirm each now matches a route. Report mismatches.
+
+### 9. Report
+
+Queries reviewed: N · Clusters: M · Approved: K (extends vs new routes) · Routes/aliases added: X · Archived.
+
+## When to run
+
+After every ~10 fall-throughs, weekly as maintenance, or before working a new area where you expect many queries.
+
+## Anti-patterns
+
+- Don't auto-apply without review — false-positive routes pollute the manifest.
+- Don't create a new route when an existing one fits — alias-spam is as bad as duplicate routes.
+- Don't reference pages that don't exist — flag and route through `/wiki-ingest` first.

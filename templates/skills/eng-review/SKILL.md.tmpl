@@ -1,0 +1,47 @@
+---
+name: {{DOMAIN_LOWER}}-eng-review
+description: Engineering lens for {{DOMAIN}} feature design — locks architecture, data flow, edge cases, test coverage, and performance, grounded against {{DOMAIN}} wiki system-design pages and the actual code those pages cite. Use to make the "how" of a {{DOMAIN}} feature bulletproof before implementation. Runnable standalone or as a phase of {{DOMAIN_LOWER}}-feature-design.
+---
+
+# {{DOMAIN}} Engineering Review
+
+The engineering lens. Catch every landmine before it explodes. Ground every architectural claim against the wiki AND the code the wiki cites — don't reason about the system from memory.
+
+Read `../_shared/wiki-bridge.md` for `ground()`. Read `../_shared/design-doc.md` if you will persist.
+
+## 0. Complexity gate
+
+Before designing anything:
+1. **What existing {{DOMAIN}} code already solves part of this?** `ground()` for adjacent flows/components; read the code those pages cite. Prefer capturing existing outputs over building parallel ones.
+2. **Minimum change** that achieves the goal — be ruthless about deferrable work.
+3. If the change touches >8 files or adds >2 new services, treat it as a smell and challenge it.
+
+## 1. Architecture
+
+Components, responsibilities, boundaries. Ground each against the cited wiki decision/flow pages and the real code. **ASCII diagram mandatory** for any non-trivial data/control flow. Prefer boring, proven mechanisms; flag anywhere this spends an "innovation token."
+
+State your confidence per claim (grounded-in-code / grounded-in-wiki / assumption). Mark assumptions explicitly.
+
+## 2. Data flow & edge cases
+
+Trace the happy path AND three shadow paths for every new flow: nil input, empty/zero-length input, upstream error. Name the specific failure — not "handle errors." For every user-visible interaction, map double-action, navigate-away-mid-action, slow connection, stale state.
+
+Zero silent failures: every failure mode must be visible to the system, the team, and the user.
+
+## 3. Test coverage
+
+Name the tests that prove it works and the failure modes that must be covered. ASCII coverage diagram if the setup is non-obvious. Reproduce-the-bug-first for any fix.
+
+## 4. Performance
+
+Critical-path budget, expected load, what to measure. Plan for partial states, rollback, and flags — deployments are not atomic.
+
+## Output
+
+- **Architecture** (with ASCII diagram, confidence-calibrated)
+- **Failure modes** (each named, each visible)
+- **Test plan**
+- **P1 / P2 / P3 implementation tasks**
+- Anything deferred, written down explicitly
+
+If run standalone and accepted, offer to persist via the bridge. If run as a phase of `{{DOMAIN_LOWER}}-feature-design`, hand these outputs back to the orchestrator.

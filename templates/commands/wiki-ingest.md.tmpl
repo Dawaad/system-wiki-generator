@@ -1,0 +1,147 @@
+---
+description: "Ingest a source into the appropriate domain wiki. Extracts non-obvious insight, classifies kind, writes/updates atomic pages with L3 decay frontmatter, updates index + routing + log."
+---
+
+# /wiki-ingest — Wiki Ingest
+
+Ingest a source into the right domain wiki. Produces atomic pages with `kind` frontmatter that drives retrieval.
+
+## Input
+
+$ARGUMENTS
+
+The argument is a path (file, directory, URL) or a free-text reference. If omitted, ask.
+
+## Workflow
+
+### 1. Resolve wiki root + detect domain (dynamic)
+
+Same as `/wiki-query` step 1: default `WIKI_ROOT={{WIKI_ROOT}}`, prefer a `wiki` symlink in the CWD, discover domains by scanning `<WIKI_ROOT>/*/CLAUDE.md`, pick by working directory → source content vs scope → ask. Read the target's `CLAUDE.md` for kinds in scope and routing rules.
+
+### 2. Capture source
+
+Always create a source pointer in `<WIKI_ROOT>/<DOMAIN>/sources/<subtype>/<name>.md`:
+
+| Source type | Subfolder |
+|-------------|-----------|
+| Repo path | `code/` |
+| ADR / design doc / README | `docs/` |
+| Research paper / article | `research/` |
+| Notion page | `notion/` |
+| Experiment / incident / benchmark | `experiments/` |
+
+Source file format:
+```yaml
+---
+type: wiki-source
+wiki: {{DOMAIN}}
+source_type: code | docs | research | notion | experiments
+location: <path or URL>
+ingested: YYYY-MM-DD
+pages_derived: []
+---
+
+# <Source title>
+
+<author / origin / date>
+
+## Highlights
+<raw passages, timestamps, code paths — verbatim, attributed>
+
+## Notes
+<initial reactions; not yet synthesized>
+```
+
+If the source is code: don't duplicate it — record the path in `location:` and reference it.
+
+### 3. Extract atomic insights
+
+Read the source. Identify non-obvious content. **One concept = one page.** Skip anything derivable from reading the source directly. Be aggressive about skipping.
+
+### 4. Classify kind
+
+For each insight, pick exactly ONE kind. If it blurs, split.
+
+| Kind | Use when |
+|------|----------|
+| `decision` | Captures *why* a path was chosen — invariant, gotcha, tradeoff |
+| `flow` | End-to-end walkthrough of an event/request |
+| `feature` | How a sub-feature orchestrates components |
+| `interaction` | How A talks to B |
+| `sop` | Prescriptive procedure ("do it this way") |
+| `insight` | Descriptive observed truth ("this is true / observed") |
+| `framework` | Lens to think through ("apply this model") |
+
+### 5. Write or update pages
+
+For each insight:
+1. Check `<WIKI_ROOT>/<DOMAIN>/index.md` for an existing page on the same topic.
+2. **If exists:** read, merge the new insight, rewrite. Don't append — synthesize.
+3. **If new:** create `<WIKI_ROOT>/<DOMAIN>/pages/<kebab-case-title>.md`.
+
+Page frontmatter (L3 decay-tracker form):
+
+```yaml
+---
+type: wiki-page
+wiki: {{DOMAIN}}
+kind: {{KINDS_PIPE}}
+sources:
+  - path: <absolute path or URL>
+    cited_region: "<heading or function name or '<whole-file>'>"
+    content_hash: <sha256 of region text>
+Updated: YYYY-MM-DD
+tags:
+---
+```
+
+For each cited source:
+1. Identify the smallest region of the source that justifies the page (a heading section, a function body, or the whole file).
+2. Set `cited_region` to a string that locates it — exact heading text (`"## Enforcement"`), a function signature (`"fn handle_request"`), or `"<whole-file>"`.
+3. Compute SHA-256 of that region:
+   ```bash
+   # heading region (from the heading line to the next sibling heading)
+   awk '/^## Enforcement/{f=1; print; next} f && /^## /{exit} f' "$SRC" | shasum -a 256 | awk '{print $1}'
+   # whole-file region
+   shasum -a 256 "$SRC" | awk '{print $1}'
+   ```
+   (Use `sha256sum` instead of `shasum -a 256` where available.)
+4. Write the hash into `content_hash`.
+
+Body rules: ≤300 words; lead with the insight/answer/rule; follow the kind-specific structure from `<WIKI_ROOT>/<DOMAIN>/CLAUDE.md`; cross-link aggressively via `[[page-name]]`; name specifics.
+
+### 6. Update index
+
+Add or update an entry in `<WIKI_ROOT>/<DOMAIN>/index.md` under the matching section. One line per page: `- [[page-name]] [kind] — one-line summary`. Match existing index style.
+
+### 7. Update routing manifest (L1)
+
+Check whether the new/updated page is reachable via at least one existing `route` in `retrieval.yaml`.
+
+- **Reachable:** no manifest change.
+- **Not reachable:** append a new route under the appropriate section. Don't reorder existing routes.
+  ```yaml
+  - pattern: "<lowercase substring users would type>"
+    aliases:
+      - "<synonym phrase>"
+    load:
+      - <WIKI_ROOT>/<DOMAIN>/pages/<new-page>.md
+    why: <one line>
+  ```
+
+### 8. Update source pointer + sync anchor
+
+Edit the source file's `pages_derived:` array. If this ingest reconciled a repo to a new commit, update that repo's `last_sync_sha` in `.last-sync` and `retrieval.yaml` `sync:` (and `synced_sha` in `index.md`).
+
+### 9. Append log
+
+Add to `<WIKI_ROOT>/<DOMAIN>/log.md`:
+```
+## [YYYY-MM-DD] ingest | <source>
+- [[page-name]] (new/updated) [kind]
+- skipped: <reason> (if applicable)
+```
+
+### 10. Report
+
+Summarize: source captured, pages created (with kind), pages updated (what changed), cross-links added, routes added, skipped insights (with why).

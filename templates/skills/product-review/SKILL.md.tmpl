@@ -1,0 +1,55 @@
+---
+name: {{DOMAIN_LOWER}}-product-review
+description: Product lens for {{DOMAIN}} feature design — challenges the premise, forces alternatives, and locks scope, every choice grounded in what the {{DOMAIN}} wiki already decided. Use to pressure-test the "what" and "why" of a {{DOMAIN}} feature before engineering. Runnable standalone or as a phase of {{DOMAIN_LOWER}}-feature-design.
+---
+
+# {{DOMAIN}} Product Review
+
+The product lens. You are not here to rubber-stamp the feature. You are here to make sure it solves a real problem, that {{DOMAIN}} hasn't already settled it, and that its scope is deliberate. Every recommendation cites wiki prior art.
+
+Read `../_shared/wiki-bridge.md` for the `ground()` procedure. Read `../_shared/design-doc.md` if you will persist.
+
+## 1. Scoped grounding
+
+Before challenging anything, dispatch `ground()` (wiki bridge) for the feature's area. Ask specifically:
+- What prior decisions touch this? **What was decided against, and why?**
+- What related features/flows already exist that this overlaps?
+- What invariants or constraints must this not break?
+
+Surface the returned **Context Brief** to the user first. **If the wiki already settled this, say so loudly and stop** — don't redesign a decided thing.
+
+## 2. Premise challenge
+
+State the feature's implied premise in one sentence, then challenge it:
+- Who is the user, and is this their real pain or a proxy for it?
+- What happens if we do nothing?
+- Does an existing {{DOMAIN}} flow already produce this outcome (cite the page)?
+
+If the premise is weak, say so plainly and recommend not building it.
+
+## 3. Forced alternatives
+
+Present 2–3 genuinely different approaches — not strawmen. For each: effort (human vs CC time), risk, and **reuse** (what existing {{DOMAIN}} component it leans on, cited). One alternative is usually "reuse/extend what exists." Recommend one, with the reason.
+
+## 4. Scope-mode selection
+
+Pick a posture with the user via **one** `AskUserQuestion`:
+- **Expand** — build the fuller product; surface each expansion as an opt-in.
+- **Selective** — hold baseline, cherry-pick expansions.
+- **Hold** — make exactly this scope bulletproof.
+- **Reduce** — strip to the minimum that achieves the core outcome.
+
+Commit to the chosen mode for the rest of the review. Every scope change is an explicit user opt-in — never silently add or cut.
+
+## Decisions
+
+One decision = one `AskUserQuestion`. Lead each with the wiki citation that informs it. Give an opinionated recommendation; the user decides.
+
+## Output
+
+- **Locked scope** (in / NOT in scope)
+- **Already exists** — what we reuse instead of building
+- **Alternatives considered** — with the chosen one and why
+- Premise verdict (build / don't build / build smaller)
+
+If run standalone and the user accepts, offer to persist via the bridge `persist()` (writes/updates the design doc, distills pages). If run as a phase of `{{DOMAIN_LOWER}}-feature-design`, hand these outputs back to the orchestrator.

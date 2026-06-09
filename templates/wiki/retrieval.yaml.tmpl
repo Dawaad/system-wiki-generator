@@ -1,0 +1,44 @@
+# L1 Routing Manifest — {{DOMAIN}} Wiki
+#
+# Deterministic task-pattern → file-path map. Read first by /wiki-query, /wiki-ingest, /wiki-lint.
+#
+# MATCHING: token-set subset match.
+#   1. Tokenize the query: split on non-word chars, lowercase, drop tokens <2 chars.
+#      Plural-stem: len>4 ...ies→y, len>4 ...es→(strip es), len>3 ...s→(strip s).
+#   2. A route matches if its `pattern` tokens ⊆ query tokens, OR any `aliases:` entry's
+#      tokens ⊆ query tokens.
+#   3. Read every matched route's `load:` paths; skip the index scan; synthesize.
+#
+# `load:` entries are paths relative to the wiki root unless prefixed with ~ or /.
+#
+# Fall-through: if no pattern + no alias matches, /wiki-query appends the query to
+# `{{DOMAIN}}/retrieval.suggested.log` (timestamp + query) and falls back to index navigation.
+# Batched review via /wiki-routes-review promotes recurring fall-throughs into routes.
+
+domain: {{DOMAIN}}
+
+# ─── Sync state (L3 staleness anchor) ──────────────────────────────
+# The commit each source repo was last fully ingested at. Canonical copy +
+# rationale live in `.last-sync`. BEFORE answering a code-grounded query, skills
+# MUST run `git -C <path> rev-parse HEAD` and compare to `last_sync_sha`. If they
+# differ, warn that the wiki is ~`git rev-list --count <sha>..HEAD` commits behind
+# and that pages touching the changed paths may be stale, then proceed.
+sync:
+{{SYNC_BLOCKS}}
+# Example shape (one block per source repo; null SHA = not yet ingested):
+#   {{REPO_NAME}}:
+#     last_sync_sha: null
+#     last_sync_date: {{DATE}}
+
+routes:
+  # Seeded routes are appended here by /wiki-ingest during generation (Phase 5).
+  # Group with section comments, e.g.:
+  #
+  #   # ─── System overview ────────────────────────────────────────────
+  #   - pattern: "system overview"
+  #     aliases:
+  #       - "what is {{DOMAIN_LOWER}}"
+  #       - "{{DOMAIN_LOWER}} architecture"
+  #     load:
+  #       - {{DOMAIN}}/pages/system-overview.md
+  #     why: Mental model — the one page to read first.

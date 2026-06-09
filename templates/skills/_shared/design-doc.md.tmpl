@@ -1,0 +1,66 @@
+# Living Design Doc Skeleton — {{DOMAIN}}
+
+The `{{DOMAIN_LOWER}}-feature-design` orchestrator writes one of these per feature to
+`{{WIKI_ROOT}}/{{DOMAIN}}/designs/YYYY-MM-DD-<feature>-design.md`. It is a living document:
+status moves `proposed → accepted`, and on acceptance its decisions are distilled into atomic
+pages via the wiki bridge `persist()` procedure.
+
+```markdown
+---
+type: wiki-design
+wiki: {{DOMAIN}}
+feature: <kebab-feature-name>
+status: proposed        # proposed | accepted | superseded
+Created: YYYY-MM-DD
+Updated: YYYY-MM-DD
+grounding:              # pages/sources the Context Brief cited
+  - [[page-name]]
+supersedes: null        # path to a prior design this replaces, if any
+tags: [{{TAG_PREFIX}}design]
+---
+
+# <Feature> — Design
+
+## Problem
+<the user-facing problem, one paragraph. What pain, for whom.>
+
+## Context Brief
+<verbatim output of the wiki-bridge ground() calls. The differentiator: what the wiki
+already knows before we propose anything.>
+
+### Decided-against / constraints
+<what was previously rejected, and the invariants this feature must not break. If the wiki
+already settled this, say so here and stop.>
+
+## Scope
+**In scope:** <locked, after the product lens>
+**NOT in scope:** <explicitly cut>
+**Already exists:** <what we reuse instead of building>
+
+## Alternatives considered
+<2–3 forced alternatives with effort / risk / reuse, each citing wiki prior art.>
+
+## Architecture
+<components, responsibilities, and an ASCII diagram of the data/control flow.>
+
+## Data flow & edge cases
+<happy path + shadow paths: nil input, empty input, upstream error. Name each.>
+
+## Test plan
+<what proves it works: unit, integration, the failure modes that must be covered. ASCII
+coverage diagram if non-trivial.>
+
+## Performance
+<critical-path budget, expected load, what to measure.>
+
+## Implementation tasks
+- [ ] P1 — <must-ship>
+- [ ] P2 — <should>
+- [ ] P3 — <nice-to-have>
+
+## Open questions
+<unresolved, with who/what would resolve them.>
+
+## Decision log
+- YYYY-MM-DD — <decision> (rationale; cites [[page]])
+```
